@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Global News Finder 🌍</title>
+  <style>
+    body {
+      font-family: "Poppins", Arial, sans-serif;
+      background: #f3f5f9;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 850px;
+      margin: auto;
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      color: #0077cc;
+      margin-bottom: 15px;
+    }
+    .inputs {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    input, select, button {
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+      width: 100%;
+    }
+    button {
+      background: #0077cc;
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #005fa3;
+    }
+    .results {
+      margin-top: 20px;
+      display: grid;
+      gap: 15px;
+    }
+    .article {
+      background: #fafafa;
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      gap: 10px;
+      box-shadow: 0 1px 5px rgba(0,0,0,0.08);
+    }
+    .article img {
+      width: 120px;
+      height: 80px;
+      border-radius: 8px;
+      object-fit: cover;
+    }
+    .article-content {
+      flex: 1;
+    }
+    .article-content h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+    .article-content p {
+      font-size: 14px;
+      color: #444;
+      margin: 5px 0;
+    }
+    .meta {
+      font-size: 12px;
+      color: #666;
+    }
+    .error {
+      color: red;
+      text-align: center;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Global News Finder 🌍</h1>
+    <div class="inputs">
+      <input type="text" id="country" placeholder="Enter country name or code (e.g. India, US)">
+      <input type="text" id="state" placeholder="Enter state (optional)">
+      <select id="category">
+        <option value="">Any category</option>
+        <option value="business">Business</option>
+        <option value="entertainment">Entertainment</option>
+        <option value="general">General</option>
+        <option value="health">Health</option>
+        <option value="science">Science</option>
+        <option value="sports">Sports</option>
+        <option value="technology">Technology</option>
+      </select>
+    </div>
+    <button onclick="getNews()">Get News</button>
+    <div id="error" class="error"></div>
+    <div id="results" class="results"></div>
+  </div>
+
+  <script>
+    const API_KEY = "75af543f39d9484d94bbff0bc911dfaa";
+
+    // Country name → ISO code map
+    const countryMap = {
+      india: "in", "united states": "us", usa: "us",
+      uk: "gb", "united kingdom": "gb",
+      canada: "ca", australia: "au", germany: "de",
+      france: "fr", italy: "it", japan: "jp",
+      china: "cn", russia: "ru", brazil: "br",
+      mexico: "mx", spain: "es", indonesia: "id",
+      nigeria: "ng", kenya: "ke", pakistan: "pk",
+      bangladesh: "bd", sri_lanka: "lk", nepal: "np",
+      singapore: "sg", south_africa: "za", argentina: "ar"
+    };
+
+    async function getNews() {
+      const countryInput = document.getElementById("country").value.trim().toLowerCase();
+      const stateInput = document.getElementById("state").value.trim();
+      const category = document.getElementById("category").value;
+      const resultsDiv = document.getElementById("results");
+      const errorDiv = document.getElementById("error");
+
+      resultsDiv.innerHTML = "";
+      errorDiv.textContent = "";
+
+      if (!countryInput && !stateInput) {
+        errorDiv.textContent = "Please enter at least a country or state.";
+        return;
+      }
+
+      const countryCode = countryMap[countryInput] || (countryInput.length === 2 ? countryInput : "");
+      let url = "";
+
+      // If we have a valid country code and no state, use top-headlines
+      if (countryCode && !stateInput) {
+        url = `https://newsapi.org/v2/top-headlines?country=${countryCode}&apiKey=${API_KEY}&pageSize=30`;
+        if (category) url += `&category=${category}`;
+      } else {
+        // fallback: use everything search
+        const queryParts = [stateInput, countryInput, category].filter(Boolean);
+        const query = queryParts.join(" ");
+        url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}&apiKey=${API_KEY}&pageSize=30&sortBy=publishedAt`;
+      }
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.status !== "ok" || !data.articles.length) {
+          // If top-headlines found nothing for country name, fallback to everything
+          if (countryInput && !stateInput && countryCode) {
+            const fallbackUrl = `https://newsapi.org/v2/everything?q=${encodeURIComponent(countryInput)}&apiKey=${API_KEY}&pageSize=30&sortBy=publishedAt`;
+            const fallbackRes = await fetch(fallbackUrl);
+            const fallbackData = await fallbackRes.json();
+            if (fallbackData.articles?.length) {
+              renderArticles(fallbackData.articles);
+              return;
+            }
+          }
+          errorDiv.textContent = "No news found for that location.";
+          return;
+        }
+
+        renderArticles(data.articles);
+      } catch (err) {
+        errorDiv.textContent = "Error fetching news: " + err.message;
+      }
+    }
+
+    function renderArticles(articles) {
+      const container = document.getElementById("results");
+      container.innerHTML = "";
+      articles.forEach(a => {
+        const div = document.createElement("div");
+        div.className = "article";
+
+        const img = document.createElement("img");
+        img.src = a.urlToImage || "https://via.placeholder.com/120x80?text=No+Image";
+        div.appendChild(img);
+
+        const content = document.createElement("div");
+        content.className = "article-content";
+        const title = document.createElement("h3");
+        title.innerHTML = `<a href="${a.url}" target="_blank">${a.title}</a>`;
+        const desc = document.createElement("p");
+        desc.textContent = a.description || "";
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.textContent = `${a.source?.name || "Unknown"} · ${new Date(a.publishedAt).toLocaleString()}`;
+        content.appendChild(title);
+        content.appendChild(desc);
+        content.appendChild(meta);
+        div.appendChild(content);
+        container.appendChild(div);
+      });
+    }
+  </script>
+</body>
+</html>
